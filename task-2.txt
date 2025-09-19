@@ -1,0 +1,151 @@
+4. Application Health Checker:
+
+Python script:
+
+import requests
+
+def check_application_health(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return "Application is UP"
+        else:
+            return f"Application is DOWN (HTTP status code: {response.status_code})"
+    except requests.RequestException:
+        return "Error: Unable to connect to the application"
+
+# Example usage:
+application_url = "https://example.com"
+result = check_application_health(application_url)
+print(result)
+
+
+Shell script: (its direct command we can run)
+
+awk '{ if($1 > 90 * 24 * 3600) print "Uptime is greater than 90 days"; else print "Uptime is less than or equal to 90 days" }' /proc/uptime
+
+Shell script: second solution.
+
+#!/bin/bash
+
+# Configuration
+URL="https://example.com/health"  # The URL to check
+EXPECTED_STATUS_CODE=200          # Expected status code for a functioning application
+TIMEOUT=5                         # Request timeout in seconds
+
+# Function to check application status
+check_application_status() {
+  # Send a GET request and capture the HTTP status code
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time $TIMEOUT $URL)
+
+  if [ "$HTTP_STATUS" -eq "$EXPECTED_STATUS_CODE" ]; then
+    echo "Application is UP. Status Code: $HTTP_STATUS"
+  else
+    echo "Application is DOWN. Status Code: $HTTP_STATUS"
+  fi
+}
+
+# Call the function
+check_application_status
+
+
+1. System Health Monitoring Script:
+
+Python script:
+
+#!/usr/bin/env python3
+import psutil
+
+# Define thresholds (adjust as needed)
+CPU_THRESHOLD = 80  # Percentage
+MEMORY_THRESHOLD = 90  # Percentage
+DISK_THRESHOLD = 80  # Percentage
+
+def check_cpu():
+    cpu_percent = psutil.cpu_percent(interval=1)
+    if cpu_percent > CPU_THRESHOLD:
+        print(f"Alert: CPU usage is {cpu_percent}% (threshold: {CPU_THRESHOLD}%)")
+
+def check_memory():
+    virtual_memory = psutil.virtual_memory()
+    if virtual_memory.percent > MEMORY_THRESHOLD:
+        print(f"Alert: Memory usage is {virtual_memory.percent}% (threshold: {MEMORY_THRESHOLD}%)")
+
+def check_disk():
+    partitions = psutil.disk_partitions()
+    for partition in partitions:
+        usage = psutil.disk_usage(partition.mountpoint)
+        if usage.percent > DISK_THRESHOLD:
+            print(f"Alert: Disk space on {partition.device} is {usage.percent}% full (threshold: {DISK_THRESHOLD}%)")
+
+def check_processes():
+    for process in psutil.process_iter(attrs=["pid", "name"]):
+        print(f"Process: {process.info['name']} (PID: {process.info['pid']})")
+
+if __name__ == "__main__":
+    check_cpu()
+    check_memory()
+    check_disk()
+    check_processes()
+
+
+Shell script:
+
+#!/bin/bash
+
+# Define thresholds (adjust as needed)
+CPU_THRESHOLD=80
+MEMORY_THRESHOLD=90
+DISK_THRESHOLD=80
+
+# Log file for alerts
+LOG_FILE="/var/log/system_health.log"
+
+# Check CPU usage
+check_cpu() {
+    local cpu_percent
+    cpu_percent=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}')
+    if (( $(echo "$cpu_percent > $CPU_THRESHOLD" | bc -l) )); then
+        echo "Alert: CPU usage is $cpu_percent% (threshold: $CPU_THRESHOLD%)" >> "$LOG_FILE"
+    fi
+}
+
+# Check memory usage
+check_memory() {
+    local memory_percent
+    memory_percent=$(free -m | awk '/Mem/ {print $3/$2 * 100}')
+    if (( $(echo "$memory_percent > $MEMORY_THRESHOLD" | bc -l) )); then
+        echo "Alert: Memory usage is $memory_percent% (threshold: $MEMORY_THRESHOLD%)" >> "$LOG_FILE"
+    fi
+}
+
+# Check disk space
+check_disk() {
+    local disk_percent
+    while read -r partition; do
+        disk_percent=$(df -h "$partition" | awk '/\// {print $5}' | tr -d '%')
+        if (( $(echo "$disk_percent > $DISK_THRESHOLD" | bc -l) )); then
+            echo "Alert: Disk space on $partition is $disk_percent% full (threshold: $DISK_THRESHOLD%)" >> "$LOG_FILE"
+        fi
+    done < <(df -h | awk '$1 ~ /^\// {print $1}')
+}
+
+# Check running processes
+check_processes() {
+    echo "Running processes:" >> "$LOG_FILE"
+    ps aux >> "$LOG_FILE"
+}
+
+# Main function
+main() {
+    check_cpu
+    check_memory
+    check_disk
+    check_processes
+}
+
+main
+
+
+
+
